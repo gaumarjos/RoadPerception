@@ -6,12 +6,11 @@ flow --imgdir sample_img/ --model cfg/yolo.cfg --load bin/thtrieu/yolo.weights -
 flow --imgdir sample_img/ --model cfg/yolo-voc.cfg --load bin/thtrieu/yolo.weights --gpu 0.8
 """
 
-from darkflow.net.build import TFNet
-from darkflow.cython_utils import cy_yolo_findboxes
 import cv2
 import numpy as np
-from moviepy.editor import VideoFileClip, ImageSequenceClip
 import time
+from moviepy.editor import VideoFileClip, ImageSequenceClip
+from includes.car_detection import *
 
 
 # Operational mode
@@ -23,103 +22,31 @@ video_filename = 'videos/quick_test/test.mp4'
 video_output_filename = video_filename[:-4] + '_output.mp4'
 
 
-"""
-FUNCTIONS TAKEN FROM THE CARND PROJECT
-"""
-# Draw bounding boxes
-def draw_boxes(img, bboxes, color=(0,0,255), thick=6):
-    # Make a copy of the image
-    imcopy = np.copy(img)
-    # Iterate through the bounding boxes
-    for bbox in bboxes:
-        # Draw a rectangle given bbox coordinates
-        cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
-    # Return the image copy with boxes drawn
-    return imcopy
-    
-
-# Master pipeline function, containing all operations performed on the frames
-class ProcessingPipeline():
-    def __init__(self,
-                 video_output):
-        
-        self.video_output = video_output
-        
-        
-    def pipeline(self, img):
-    
-        # Default image output
-        if self.video_output:
-            img_out = np.copy(img)
-    
-        if img is not None:
-            # Detect objects in frame
-            detections = tfnet.return_predict(img)
-            
-            # Go through each detection
-            bboxes = []
-            if len(detections) > 0:
-                for detection in detections:
-                
-                    # Check if the object is an interesting one
-                    if detection ["label"] == "person" or \
-                       detection ["label"] == "bicycle" or \
-                       detection ["label"] == "car" or \
-                       detection ["label"] == "motorbike" or \
-                       detection ["label"] == "bus" or \
-                       detection ["label"] == "train" or \
-                       detection ["label"] == "truck":
-
-                        bbox = ( (detection["topleft"]["x"], detection["topleft"]["y"]), 
-                                 (detection["bottomright"]["x"], detection["bottomright"]["y"]) )
-                        bboxes.append(bbox)
-                
-                if self.video_output:
-                    img_out = draw_boxes(img, bboxes, color=(0,0,255), thick=6)
-        
-        # Output
-        if self.video_output:
-            result = {"img": img_out,
-                      "bboxes": bboxes}
-        else:
-            result = {"img": None,
-                      "bboxes": bboxes}
-        
-        return result
-       
-
-# Load darkflow 
-options = {"model": "cfg/yolo.cfg",
-           "load":  "bin/thtrieu/yolo.weights",
-           "threshold": 0.3,
-           "gpu": 0.9}
-tfnet = TFNet(options)
-
-
 if MODE == 'video_moviepy':
     # Open video
     clip = VideoFileClip(video_filename)
-    processed_frames = []
     
     # Initialize processing object
-    process = ProcessingPipeline(video_output=True)
+    process = YOLOVehicleDetector(video_output=True)
+    
+    # Results
+    processed_frames = []
     
     # Process every frame
     fcount = 0
     t0 = time.time()
     for frame in clip.iter_frames():
-        if fcount > 50:
-            break    
         
         # Process frame
-        result = process.pipeline(frame)
+        result = process.search_in_image(frame)
         
         # Append the frame with bboxes drawn on it
         if process.video_output:
             processed_frames.append(result["img"])
-            
-        # print(result["bboxes"])
         
+        # Frame counter
+        if fcount % 25 == 0:
+            print("Frame #{}".format(fcount))
         fcount += 1
     
     # Time stats

@@ -16,7 +16,22 @@ from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split  # if you are using scikit-learn >= 0.18
 from scipy.ndimage.measurements import label
 
+from darkflow.net.build import TFNet
+from darkflow.cython_utils import cy_yolo_findboxes
+
 from includes.car_classification import *
+
+
+# Draw bounding boxes
+def draw_boxes(img, bboxes, color=(0,0,255), thick=6):
+    # Make a copy of the image
+    imcopy = np.copy(img)
+    # Iterate through the bounding boxes
+    for bbox in bboxes:
+        # Draw a rectangle given bbox coordinates
+        cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
+    # Return the image copy with boxes drawn
+    return imcopy
 
 
 class VehicleDetector():
@@ -251,15 +266,15 @@ class VehicleDetector():
         # Draw output image
         # Draw on camera image
         if self.full_output:
-            draw_img = self.draw_boxes(draw_img, bboxes)
+            draw_img = draw_boxes(draw_img, bboxes)
         # Draw on blank canvas
         else:
-            draw_img = self.draw_boxes(np.zeros_like(draw_img, dtype=np.uint8), bboxes)
+            draw_img = draw_boxes(np.zeros_like(draw_img, dtype=np.uint8), bboxes)
         
         if self.show_intermediate_results:
             f, (ax1, ax2, ax3) = plt.subplots(1,3, figsize=(20,10))
             
-            on_windows_img = self.draw_boxes(draw_img, on_windows)
+            on_windows_img = draw_boxes(draw_img, on_windows)
             ax1.imshow(on_windows_img)
             ax1.set_title('Positive detections')
             
@@ -314,16 +329,60 @@ class VehicleDetector():
             centroids.append(centroid)
             """
         return bboxes
+        
+        
+# Master pipeline function, containing all operations performed on the frames
+class YOLOVehicleDetector():
+    def __init__(self,
+                 video_output):
+        
+        self.video_output = video_output
+        
+        # Load network
+        options = {"model": "cfg/yolo.cfg",
+                   "load":  "bin/thtrieu/yolo.weights",
+                   "threshold": 0.3,
+                   "gpu": 0.9}
+        self.tfnet = TFNet(options)
+        
+        
+    def search_in_image(self, img):
     
+        # Default image output
+        if self.video_output:
+            img_out = np.copy(img)
     
-    @staticmethod
-    # Draw bounding boxes
-    def draw_boxes(img, bboxes, color=(0,0,255), thick=6):
-        # Make a copy of the image
-        imcopy = np.copy(img)
-        # Iterate through the bounding boxes
-        for bbox in bboxes:
-            # Draw a rectangle given bbox coordinates
-            cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
-        # Return the image copy with boxes drawn
-        return imcopy
+        if img is not None:
+            # Detect objects in frame
+            detections = self.tfnet.return_predict(img)
+            
+            # Go through each detection
+            bboxes = []
+            if len(detections) > 0:
+                for detection in detections:
+                
+                    # Check if the object is an interesting one
+                    if detection ["label"] == "person" or \
+                       detection ["label"] == "bicycle" or \
+                       detection ["label"] == "car" or \
+                       detection ["label"] == "motorbike" or \
+                       detection ["label"] == "bus" or \
+                       detection ["label"] == "train" or \
+                       detection ["label"] == "truck":
+
+                        bbox = ( (detection["topleft"]["x"], detection["topleft"]["y"]), 
+                                 (detection["bottomright"]["x"], detection["bottomright"]["y"]) )
+                        bboxes.append(bbox)
+                
+                if self.video_output:
+                    img_out = draw_boxes(img, bboxes, color=(0,0,255), thick=6)
+        
+        # Output
+        if self.video_output:
+            result = {"img": img_out,
+                      "bboxes": bboxes}
+        else:
+            result = {"img": None,
+                      "bboxes": bboxes}
+        
+        return result

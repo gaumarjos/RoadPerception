@@ -285,8 +285,9 @@ class VehicleDetector():
             ax3.set_title('Final boxes')
             
         return draw_img
-
-
+    
+    
+    # Tracking / averaging function
     def update_heatmap(self, draw_img, bbox_list):
         # Create empty heatmap
         this_frame_heatmap = np.zeros_like(draw_img[:, :, 0]).astype(np.float)
@@ -305,7 +306,7 @@ class VehicleDetector():
         self.heatmap_fifo.append(this_frame_heatmap)
         
         # We update the current heatmap with all the elements from the heatmap history
-        self.heatmap = np.sum(np.array(self.heatmap_fifo), axis=0)# / self.heatmap_fifo_length
+        self.heatmap = np.sum(np.array(self.heatmap_fifo), axis=0)
         
         # And threshold it
         self.heatmap[self.heatmap < self.threshold] = 0
@@ -332,10 +333,34 @@ class VehicleDetector():
         
         
 # Master pipeline function, containing all operations performed on the frames
+"""
+Configurations that work:
+
+flow --imgdir sample_img/ --model cfg/tiny-yolo-voc.cfg --load bin/thtrieu/tiny-yolo-voc.weights --gpu 0.8
+flow --imgdir sample_img/ --model cfg/yolo.cfg --load bin/thtrieu/yolo.weights --gpu 0.8
+flow --imgdir sample_img/ --model cfg/yolo-voc.cfg --load bin/thtrieu/yolo.weights --gpu 0.8
+"""
 class YOLOVehicleDetector():
     def __init__(self,
-                 video_output):
+                 use_tracking=True,
+                 video_output=True):
+                 
+        # Use averaging / tracking
+        self.use_tracking = use_tracking
         
+        # Best heatmap
+        self.heatmap = None
+        
+        # Heatmaps FIFO length
+        self.heatmap_fifo_length = 4
+        
+        # Heatmaps FIFO
+        self.heatmap_fifo = deque(maxlen=self.heatmap_fifo_length)
+        
+        # Threshold for heatmap
+        self.threshold = 2
+        
+        # Produce video output or just bounding boxes
         self.video_output = video_output
         
         # Load network
@@ -357,7 +382,7 @@ class YOLOVehicleDetector():
             detections = self.tfnet.return_predict(img)
             
             # Go through each detection
-            bboxes = []
+            on_windows = []
             if len(detections) > 0:
                 for detection in detections:
                 
@@ -370,19 +395,74 @@ class YOLOVehicleDetector():
                        detection ["label"] == "train" or \
                        detection ["label"] == "truck":
 
-                        bbox = ( (detection["topleft"]["x"], detection["topleft"]["y"]), 
-                                 (detection["bottomright"]["x"], detection["bottomright"]["y"]) )
-                        bboxes.append(bbox)
-                
-                if self.video_output:
-                    img_out = draw_boxes(img, bboxes, color=(0,0,255), thick=6)
+                        on_window = ( (detection["topleft"]["x"], detection["topleft"]["y"]), 
+                                      (detection["bottomright"]["x"], detection["bottomright"]["y"]) )
+                        on_windows.append(on_window)
+        
+        if self.use_tracking:
+            # Compute heatmap and update internal status
+            self.update_heatmap(img.shape, on_windows)
+            
+            # Find final boxes from heatmap using label function
+            labels = label(self.heatmap)
+            bboxes = self.generate_bboxes(labels)
+        else:
+            bboxes = on_windows
         
         # Output
         if self.video_output:
+            img_out = draw_boxes(img, bboxes, color=(0,0,255), thick=6)
             result = {"img": img_out,
                       "bboxes": bboxes}
         else:
             result = {"img": None,
                       "bboxes": bboxes}
+                      
+        return result              
+    
+    
+    # Tracking / averaging function
+    def update_heatmap(self, heatmap_shape, bbox_list):
+        # Create empty heatmap
+        this_frame_heatmap = np.zeros((heatmap_shape[0], heatmap_shape[1])).astype(np.float)
         
-        return result
+        # Add all boxes to the heatmat, we now have an heatmap for the whole image
+        for box in bbox_list:
+            this_frame_heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
+        
+        # Blur the heatmap to have a more continuous behaviour
+        """
+        this_frame_heatmap = cv2.GaussianBlur(this_frame_heatmap,
+                                              (self.blur_kernel, self.blur_kernel), 0)
+        """
+        
+        # We keep that in memory
+        self.heatmap_fifo.append(this_frame_heatmap)
+        
+        # We update the current heatmap with all the elements from the heatmap history
+        self.heatmap = np.sum(np.array(self.heatmap_fifo), axis=0)
+        
+        # And threshold it
+        self.heatmap[self.heatmap < self.threshold] = 0
+        
+        # self.heatmap = np.clip(heatmap, 0, 255)
+        
+        
+    # Generate bounding boxes from labels
+    def generate_bboxes(self,labels):
+        bboxes = []
+        # centroids = []
+        for labelnr in range(1, labels[1] + 1):
+            nonzero = (labels[0] == labelnr).nonzero()
+            nonzeroy = np.array(nonzero[0])
+            nonzerox = np.array(nonzero[1])
+            bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+            bboxes.append(bbox)
+            """
+            centroid = ((np.min(nonzerox) + np.max(nonzerox)) / 2,
+                        (np.min(nonzeroy) + np.max(nonzeroy)) / 2)
+            centroids.append(centroid)
+            """
+        return bboxes
+                
+        

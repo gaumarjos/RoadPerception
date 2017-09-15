@@ -343,7 +343,8 @@ flow --imgdir sample_img/ --model cfg/yolo-voc.cfg --load bin/thtrieu/yolo.weigh
 class YOLOVehicleDetector():
     def __init__(self,
                  use_tracking=True,
-                 video_output=True):
+                 video_output=True,
+                 video_output_with_camera_background=True):
                  
         # Use averaging / tracking
         self.use_tracking = use_tracking
@@ -362,6 +363,7 @@ class YOLOVehicleDetector():
         
         # Produce video output or just bounding boxes
         self.video_output = video_output
+        self.video_output_with_camera_background = video_output_with_camera_background
         
         # Load network
         options = {"model": "cfg/yolo.cfg",
@@ -375,7 +377,7 @@ class YOLOVehicleDetector():
     
         # Default image output
         if self.video_output:
-            img_out = np.copy(img)
+            draw_img = np.copy(img)
     
         if img is not None:
             # Detect objects in frame
@@ -411,9 +413,13 @@ class YOLOVehicleDetector():
         
         # Output
         if self.video_output:
-            img_out = draw_boxes(img, bboxes, color=(0,0,255), thick=6)
-            result = {"img": img_out,
-                      "bboxes": bboxes}
+            if self.video_output_with_camera_background:
+                draw_img = draw_boxes(draw_img, bboxes, color=(0,0,255), thick=6)
+            else:
+                draw_img = draw_boxes(np.zeros_like(draw_img, dtype=np.uint8), bboxes, color=(0,0,255), thick=6)
+                
+            result = {"img": draw_img,
+                      "bboxes": bboxes}   
         else:
             result = {"img": None,
                       "bboxes": bboxes}

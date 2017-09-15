@@ -67,22 +67,11 @@ def undistort_image(img, mtx, dist):
     return dst
 
 
-def warp_image(img):
-    #           1280          720
+def warp_image(img, src, dst):
+               
     img_size = (img.shape[1], img.shape[0])
     h = img.shape[0]
     w = img.shape[1]
-    
-    src = np.float32([[575+5, 460],
-                      [w-575, 460],
-                      [260, 685],
-                      [w-260+20, 685]])
-    
-    side = 300
-    dst = np.float32([[side, 0],
-                      [w-side, 0],
-                      [side, h],
-                      [w-side, h]])
     
     M = cv2.getPerspectiveTransform(src, dst)
     Minv = cv2.getPerspectiveTransform(dst, src)

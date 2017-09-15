@@ -6,4 +6,6 @@ car_classification/vehicles/*
 car_classification/non-vehicles/*
 videos/*
 test_images/.DS_Store
+includes/__pycache__/*.pyc
+
 

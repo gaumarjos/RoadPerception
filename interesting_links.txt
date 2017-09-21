@@ -1,0 +1,2 @@
+https://github.com/xslittlegrass/CarND-Vehicle-Detection
+http://guanghan.info/blog/en/my-works/train-yolo/

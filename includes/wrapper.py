@@ -91,7 +91,7 @@ class RoadPerception():
         
         # Processing modes
         if mode == 'entirevideo':
-            output_clip = clip.fl_image(self.video_processing_pipeline).subclip(0,10)
+            output_clip = clip.fl_image(self.video_processing_pipeline)#.subclip(0,10)
         
         elif mode == 'framebyframe':
             processed_frames = []

@@ -69,13 +69,13 @@ def color_select(img):
     
     ret, rgb_r_binary = cv2.threshold(rgb_r, 210, 255, cv2.THRESH_BINARY)
     ret, hls_s_binary = cv2.threshold(hls_s, 175, 255, cv2.THRESH_BINARY)
-    ret, hls_l_binary = cv2.threshold(hls_l, 100, 255, cv2.THRESH_BINARY) # 200 CALIBRATE
+    ret, hls_l_binary = cv2.threshold(hls_l, 125, 255, cv2.THRESH_BINARY) # 200 CALIBRATE
     hls_l_adapt_binary = cv2.adaptiveThreshold(hls_l,
                                                255,
                                                cv2.ADAPTIVE_THRESH_MEAN_C,
                                                cv2.THRESH_BINARY,
-                                               35,
-                                               -40)
+                                               45,  # 35
+                                               -20) # -40
     ret, lab_b_binary = cv2.threshold(lab_b, 160, 255, cv2.THRESH_BINARY)
     lab_b_adapt_binary = cv2.adaptiveThreshold(lab_b,
                                                255,
@@ -92,7 +92,7 @@ def color_select(img):
                     (hls_l_binary == 255) |
                     (lab_b_binary == 255)] = 1
     """
-    combined_binary[(hls_l_binary == 255) |
+    combined_binary[(hls_l_adapt_binary == 255) |
                     (lab_b_adapt_binary == 255)] = 1
     
     # Debug
@@ -103,19 +103,19 @@ def color_select(img):
             ax1.set_title('lab_b')
             ax2.imshow(lab_b_binary, cmap='gray')
             
-        if 1:
+        if 0:
             f, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
             ax1.imshow(lab_b, cmap='gray')
             ax1.set_title('lab_b_adapt')
             ax2.imshow(lab_b_adapt_binary, cmap='gray')
             
-        if 1:
+        if 0:
             f, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
             ax1.imshow(hls_l, cmap='gray')
             ax1.set_title('hls_l')
             ax2.imshow(hls_l_binary, cmap='gray')
             
-        if 0:
+        if 1:
             f, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
             ax1.imshow(hls_l, cmap='gray')
             ax1.set_title('hls_l_adapt')
@@ -127,7 +127,7 @@ def color_select(img):
             ax1.set_title('hls_s')
             ax2.imshow(hls_s_binary, cmap='gray')
             
-        if 1:
+        if 0:
             f, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
             ax1.imshow(img)
             ax1.set_title('original')
